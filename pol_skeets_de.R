@@ -169,7 +169,7 @@ skeets_de <- bind_rows(skeets_list)
 skeets_de <- skeets_de %>%
   dplyr::mutate(indexed_at = as.Date(indexed_at, format = "%Y-%m-%d %H:%M:%S"))
 
-# Step 4: Subset bsky_de_nao and rename 'indexed_at' to 'joined'
+# Step 4: Subset bsky_de_nao and rename 'indexed_at' to 'joined' (if included!)
 bsky_de_nao_subset <- bsky_de_nao %>%
   dplyr::select(bsky_handle, Party, joined = indexed_at)
 
