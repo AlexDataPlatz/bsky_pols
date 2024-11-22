@@ -147,7 +147,7 @@ fetch_skeets <- function(handle) {
   
   # Fetch skeets using the cleaned handle
   skeets <- tryCatch(
-    atrrr::get_skeets_authored_by(actor = clean_handle, parse = TRUE),
+    atrrr::get_skeets_authored_by(actor = clean_handle, parse = TRUE, limit = 5000L),
     error = function(e) {
       warning(paste("Error fetching skeets for handle:", handle, "Error:", e$message))
       return(NULL)
