@@ -5,6 +5,7 @@
 # or from CRAN
 # install.packages("atrrr") 
 library(atrrr)
+library(tidyverse)
 
 # set up app password in browser, then add to R studio to authenticate
 auth("*add_your_handle_here.bsky.social*")
@@ -35,8 +36,11 @@ bundestag_table <- bundestag_table[, -4]
 
 
 # Import names with account handles from GitHub
+
+# Or download and import most recent *bsky_de.csv* file from Teams folder
+
 # URL of the raw CSV file
-gh_url <- "https://raw.githubusercontent.com/AlexDataPlatz/bsky_pols/main/bsky_de.csv"
+gh_url <- "https://raw.githubusercontent.com/AlexDataPlatz/bsky_pols/main/bsky_de_2811.csv"
 
 # Download the file using httr
 response <- GET(gh_url)
@@ -56,6 +60,7 @@ if (status_code(response) == 200) {
 } else {
   stop("Failed to download the file.")
 }
+
 
 # Make sure names and variables match for merging
 bsky_de <- bsky_de %>%
@@ -94,8 +99,6 @@ bsky_de <- merge(bundestag_table, bsky_de, by = 'name', all = TRUE)
 #   filter(n() > 1)
 
 post <- search_post("from:@alexhartland.bsky.social")
-
-post <- get_user_info(actor = "alexhartland.bsky.social")  
 
 post <- get_skeets_authored_by(actor = "alexhartland.bsky.social", parse = TRUE) 
 
@@ -164,35 +167,37 @@ skeets_list <- purrr::map(bsky_de_nao$bsky_handle, fetch_skeets)
 # Combine skeets into a single dataframe
 skeets_de <- bind_rows(skeets_list)
 
-# Step 3: Clean the 'indexed_at' variable in skeets_de
+# Clean the 'indexed_at' variable in skeets_de
 # Convert 'indexed_at' to Date format and filter by date
 skeets_de <- skeets_de %>%
   dplyr::mutate(indexed_at = as.Date(indexed_at, format = "%Y-%m-%d %H:%M:%S"))
 
-# Step 4: Subset bsky_de_nao and rename 'indexed_at' to 'joined' (if included!)
+# Subset bsky_de_nao and rename 'indexed_at' to 'joined'
 bsky_de_nao_subset <- bsky_de_nao %>%
-  dplyr::select(bsky_handle, Party, joined = indexed_at)
+  dplyr::select(bsky_handle, Party)
 
 # create handle variable for merging
 skeets_de$bsky_handle <- paste0("@", skeets_de$author_handle)
 
-# Step 5: Merge the subsetted dataframe with skeets_de
+# Merge the subset data frame with skeets_de
 # Merge by 'bsky_handle', keeping all values from skeets_de
 skeets_de <- skeets_de %>%
   left_join(bsky_de_nao_subset, by = "bsky_handle")
 
-# Step 1: Remove rows where is_reskeet is TRUE
+# Remove rows where is_reskeet is TRUE
+# Somehow can't find the handle for who is reskeeting, only the original author
+# Should be able to add this in future iteration
 skeets_de <- skeets_de %>%
   filter(!is_reskeet)
 
-# Step 2: Combine "CDU" and "CSU" into a single "CDU" category in Party column
+# Combine "CDU" and "CSU" into a single "CDU" category in Party column
 skeets_de <- skeets_de %>%
   mutate(Party = if_else(Party %in% c("CDU", "CSU"), "CDU", Party))
 
-# Step 3: Rename Party values to match the desired names
+# Rename Party values to match the desired names
 # Define a mapping for the Party values
 party_mapping <- c(
-  "CDU" = "CDU",
+  "CDU" = "CDU/CSU",
   "FDP" = "FDP",
   "GRÜNE" = "Grüne",
   "LINKE" = "Die Linke",
@@ -209,7 +214,7 @@ skeets_de <- skeets_de %>%
 # Define the color mapping for the parties
 party_colors <- c(
   "AfD" = "#00A2DE",
-  "CDU" = "#151518",
+  "CDU/CSU" = "#151518",
   "FDP" = "#FFED00",
   "Grüne" = "#409A3C",
   "Die Linke" = "#BE3075",
@@ -219,17 +224,17 @@ party_colors <- c(
 
 # Step 1: Aggregate the data to count skeets per day per Party
 skeets_daily <- skeets_de %>%
-  group_by(indexed_at, Party) %>%
-  summarize(skeets_count = n(), .groups = "drop")
+  dplyr::group_by(indexed_at, Party) %>%
+  dplyr::summarize(skeets_count = n(), .groups = "drop")
 
 # Step 2: Create the geom_line plot
 ggplot(skeets_daily, aes(x = indexed_at, y = skeets_count, color = Party)) +
   geom_line(size = 1) +  # Set line thickness
   scale_color_manual(values = party_colors) +  # Apply the custom color mapping
   labs(
-    title = "Daily Skeets Count by Party",
+    title = "Daily Post Count by Party",
     x = "Date",
-    y = "Number of Skeets",
+    y = "Number of Posts",
     color = "Party"
   ) +
   theme_minimal() +  # Clean, minimal theme
@@ -241,20 +246,22 @@ ggplot(skeets_daily, aes(x = indexed_at, y = skeets_count, color = Party)) +
 
 # Filter the data for dates from 2024-10-01 onwards
 skeets_daily_filtered <- skeets_daily %>%
-  filter(indexed_at >= as.Date("2024-10-01"))
+  filter(indexed_at >= as.Date("2024-10-01")) %>%
+  dplyr::filter(indexed_at < max(indexed_at))
 
 # Create the geom_line plot
 ggplot(skeets_daily_filtered, aes(x = indexed_at, y = skeets_count, color = Party)) +
   geom_line(size = 1) +  # Set line thickness
   scale_color_manual(values = party_colors) +  # Apply the custom color mapping
   labs(
-    title = "Daily Skeets Count by Party (From 2024-10-01)",
-    x = "Date",
-    y = "Number of Skeets",
+    title = "Daily Posts per Party",
+    x = "",
+    y = "Posts per Day",
     color = "Party"
-  ) +
-  theme_minimal() +  # Clean, minimal theme
+  ) + 
+  theme_light() + 
   theme(
-    legend.position = "bottom",  # Move legend to the bottom
+    legend.position = "right",
+    legend.title = element_blank(),
     axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels
   )
